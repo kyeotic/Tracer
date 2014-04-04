@@ -17,6 +17,17 @@ var DebugOutput = function(output) {
   this.output = output;
 };
 
+var Point = function(x, y) {
+  return {
+    x: Math.floor(x),
+    y: Math.floor(y)
+  };
+};
+
+var getMidPoint = function(p1, p2) {
+  return new Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
+};
+
 var DrawViewmodel = function(canvasId, config) {
   var self = this;
   //Canvas properties
@@ -95,8 +106,7 @@ var DrawViewmodel = function(canvasId, config) {
   var getNextPoint = function(previous) {
     var yBoost = 0,
         xBoost = 0,
-        boostFactor = parseFloat(self.curveStep()) +
-                      parseFloat(self.curveRate());
+        boostFactor = parseFloat(self.curveStep());
 
     if (xIncreasing && yIncreasing) { //Bottom Right
       yBoost = -boostFactor;
@@ -108,18 +118,18 @@ var DrawViewmodel = function(canvasId, config) {
       xBoost = -boostFactor;
     }
 
-    return {
-      x: getReflection(self.width(), previous.x) + xBoost,
-      y: getReflection(self.height(), previous.y) + yBoost
-    };
+    return new Point(getReflection(self.width(), previous.x) + xBoost, getReflection(self.height(), previous.y) + yBoost);
   };
   
   var getControlPoint = function(start, finish) {    
-    var midPoint = {
-      x: (start.x + finish.x) / 2,
-      y: (start.y + finish.y) / 2
-    },
-        boost =  parseFloat(self.curveRate());
+    var boost = parseFloat(self.curveRate()),
+        midPoint = getMidPoint(start, finish),
+        centerPoint = new Point(self.width() / 2, self.height() / 2),
+        midPointToCenter = getMidPoint(midPoint, centerPoint);
+
+    //We want to move the control point towards the center of the grid
+    //So that all lines curve inward
+    //I think it makes sense to move it halfway to the center
     
     if (xIncreasing && yIncreasing) { //Bottom Right
       midPoint.y += -boost;
@@ -131,7 +141,7 @@ var DrawViewmodel = function(canvasId, config) {
       midPoint.x += -boost;
     }
     
-    return midPoint;
+    return midPointToCenter;
   };
   
   var setDirection = function(start, finish) {
@@ -139,14 +149,12 @@ var DrawViewmodel = function(canvasId, config) {
     //You hit a corner exactly, you little shit
     if ((finish.x == 0 || finish.x == self.width())
        && (finish.y == 0 || finish.y == self.height())) {
-      self.debugLines.push(new DebugOutput('Figure something out'));
-     
-      
+      self.debugLines.push(new DebugOutput('Corner Hit'));
     }
     
-    if (finish.x == 0 || finish.x == self.width()) { //left/right wall
+    if (finish.x == 0 || finish.x == self.width()) { // left or right wall
         xIncreasing = !xIncreasing;
-    } else { //up/down wall
+    } else { // up or down wall
       yIncreasing = !yIncreasing;
     }
   };
@@ -171,7 +179,7 @@ var DrawViewmodel = function(canvasId, config) {
     //Setup path
     self.context.beginPath();
     self.context.lineWidth = 1;
-    self.context.lineJoin = "round";        
+    self.context.lineJoin = "round";
     self.context.strokeStyle = 'black';
     
     var point = {x: 0, y: 0};    
@@ -227,7 +235,7 @@ var vm = new DrawViewmodel('canvas', {
   height: 300,
   width: 400,
   curveRate: 20,
-  curveStep: 5,
+  curveStep: 50,
   curves: 10,
   useColoredSegments: true,
   
@@ -235,8 +243,8 @@ var vm = new DrawViewmodel('canvas', {
   curveRateMin: -50,
   curveRateMax: 50,
 
-  curveStepMin: -40,
-  curveStepMax: 40,
+  curveStepMin: -500,
+  curveStepMax: 500,
 
   curvesMin: 0,
   curvesMax: 100,
