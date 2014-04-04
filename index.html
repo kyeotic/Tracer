@@ -1,0 +1,45 @@
+<!Doctype html>
+<html>
+    <head>
+        <title>Tracer</title>
+        <link href="app.css" media="all" rel="stylesheet" type="text/css" />
+        <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/knockout/3.1.0/knockout-min.js"></script>
+    </head>
+    <body>
+        <div>
+            <label>Curve Rate
+                <input type="range" data-bind="value: curveRate, attr: { min: curveRateMin, max: curveRateMax }" step="1" />
+                <span data-bind="text: curveRate"></span>
+            </label>
+            <label>Curve Step
+                <input type="range" data-bind="value: curveStep, attr: { min: curveStepMin, max: curveStepMax }" step="1" />
+                <span data-bind="text: curveStep"></span>
+            </label>
+            <label>Curves
+                <input type="range" data-bind="value: curves, attr: { min: curvesMin, max: curvesMax }" step="1" />
+                <span data-bind="text: curves"></span>
+            </label>
+            <label>Width
+                <input type="range" data-bind="value: width, attr: { min: widthMin, max: widthMax }" step="1" />
+                <span data-bind="text: width"></span>
+            </label>
+            <label>Height
+                <input type="range" data-bind="value: height, attr: { min: heightMin, max: heightMax }" step="1" />
+                <span data-bind="text: height"></span>
+            </label>
+            <label>Colored Segments
+                <input type="checkbox" data-bind="checked: useColoredSegments" />
+            </label>
+        </div>
+        <canvas id="canvas"></canvas>
+        <div>
+          <ol data-bind="foreach: debugLines">
+            <li>
+              <span data-bind="text: output"></span>
+            </li>
+          </ul>
+        </div>
+
+        <script type="text/javascript" src="app.js"></script>
+    </body>
+</html>
