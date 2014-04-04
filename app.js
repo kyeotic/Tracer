@@ -78,8 +78,7 @@ var DrawViewmodel = function(canvasId, config) {
      if (!self.canvas) return;
       self.drawCurve();
   });
-  self.useColoredSegments = ko.observable(true)
-                              .extend({ rateLimit: config.rateLimit });
+  self.useColoredSegments = ko.observable(true).extend({ rateLimit: config.rateLimit });
 
   //
   //Draw
