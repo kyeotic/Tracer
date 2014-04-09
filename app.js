@@ -7,9 +7,9 @@ window.requestAnimFrame =
 		window.setTimeout(callback, 1000 / 60);
 	};
 
-var DebugSegment = function(start, finish) {
-	this.output = 'Start: ' + start.x + ', ' + start.y
-								+ ', Finish: ' + finish.x + ', ' + finish.y;
+var DebugSegment = function(line) {
+	this.output = 'Start: ' + line.a.x + ', ' + line.a.y
+					+ ', Finish: ' + line.b.x + ', ' + line.b.y;
 };
 
 var DebugOutput = function(output) {
@@ -31,6 +31,8 @@ function getTanDeg(deg) {
 function convertAngleToSlope(angle) {
 	return getTanDeg(angle);
 };
+
+Math.degreeSin = function(degrees) { return Math.sin(degreesToRadians(degrees)); };
 
 //getTanDeg(angle) = slope
 
@@ -54,18 +56,70 @@ function getReflectiveSlope(p1, p2, angle) {
 //Math.tan(degreesToRadians(angle)) = slope
 
 var Point = function(x, y) {
-	return {
-		x: Math.floor(x),
-		y: Math.floor(y)
-	};
+	var self = this,
+		_x, _y;
+
+	Object.defineProperty(self, 'x', {
+		get: function() { return _x; },
+		set: function(value) { return _x = Math.floor(value); }
+	});
+
+	Object.defineProperty(self, 'y', {
+		get: function() { return _y; },
+		set: function(value) { return _y = Math.floor(value); }
+	});
+
+	self.x = x;
+	self.y = y;
+
+	self.add = function(point) { self.x += point.x; self.y += point.y;  };
+	self.multiply = function(point) { self.x *= point.x; self.y *= point.y; };
+	self.subtract = function(point) { self.x -= point.x; self.y -= point.y; };
+
+	self.copy = function() { return new Point(self.x, self.y); };
+};
+
+Point.prototype.toString = function() {
+	return 'X: ' + this.x + ', Y: ' + this.y;
 };
 
 var getMidPoint = function(p1, p2) {
 	return new Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2);
 };
 
-var DrawViewmodel = function(canvasId, config) {
+
+var LineSegment = function(a, b) {
 	var self = this;
+
+	self.a = a;
+	self.b = b;
+
+	Object.defineProperty(self, 'slope', {
+		get: function() { return getSlope(self.a, self.b); }
+	});
+
+	self.copy = function() {
+		return new LineSegment(self.a, self.b);
+	};
+
+	self.getMidPoint = function() { return getMidPoint(self.a, self.b); };
+};
+
+var SliderViewmodel = function(name, initial, min, max, step, valueHandler) {
+	var self = ko.observable(initial);
+	self.subscribe(function(n) { valueHandler(n); });
+	
+	self.name = name;
+	self.step = step;
+	self.min = min;
+	self.max = max;
+
+	return self;
+};
+
+var DrawViewmodel = function(canvasId, config) {
+	var self = this,
+		c = config;
 	//Canvas properties
 	self.canvas = null;
 	self.context = null;
@@ -73,110 +127,61 @@ var DrawViewmodel = function(canvasId, config) {
 	self.debugLines = ko.observableArray();
 	
 	//
-	//Ranges
-	//
-	self.deflectAngleMin = ko.observable(0);
-	self.deflectAngleMax = ko.observable(0);
-	
-	self.linesMin = ko.observable(0);
-	self.linesMax = ko.observable(0);
-	
-	self.widthMin = ko.observable(0);
-	self.widthMax = ko.observable(0);
-	
-	self.heightMin = ko.observable(0);
-	self.heightMax = ko.observable(0);
-	
-	//
-	//Bind board size
-	//
-	self.height = ko.observable(0).extend({ rateLimit: config.rateLimit });
-	self.height.subscribe(function(newValue) {
-		if (!self.canvas) return;
-			self.canvas.height = newValue;
-			self.draw();
-	});
-	
-	self.width = ko.observable(0).extend({ rateLimit: config.rateLimit });
-	self.width.subscribe(function(newValue) {
-		if (!self.canvas) return;
-			self.canvas.width = newValue;
-			self.draw();
-	});
-	
-	//
 	//Drawable Properties
 	//
-	self.deflectAngle = ko.observable(0).extend({ rateLimit: config.rateLimit });
-	self.deflectAngle.subscribe(function(newValue) {
-		 if (!self.canvas) return;
-			self.draw();
-	});
-	self.lines = ko.observable(0).extend({ rateLimit: config.rateLimit });
-	self.lines.subscribe(function(newValue) {
-		 if (!self.canvas) return;
-			self.draw();
-	});
-	self.useColoredSegments = ko.observable(true).extend({ rateLimit: config.rateLimit });
+	self.height = new SliderViewmodel('Height', c.height, c.heightMin, c.heightMax, 1, self.draw);
+	self.width = new SliderViewmodel('Width', c.width, c.widthMin, c.widthMax, 1, self.draw);
+	self.initialAngle = new SliderViewmodel('Initial Angle', c.initialAngle, c.angleMin, c.angleMax, 1, self.draw);
+	self.deflectAngle = new SliderViewmodel('Deflect Angle', c.deflectAngle, c.angleMin, c.angleMax, 1, self.draw);
+	self.lines = new SliderViewmodel('Lines', c.lines, c.linesMin, c.linesMax, 1, self.draw);
+
+	self.sliders = ko.observableArray([
+		self.height //, self.width, self.initialAngle, self.deflectAngle, self.lines
+	]);
+
+	self.canvas = document.getElementById(canvasId);
+	self.context = self.canvas.getContext('2d');
+	self.useColoredSegments = ko.observable(true);
 
 	//
-	//Draw
+	//Drawing
 	//
-	var xIncreasing = true,
-			yIncreasing = true,
-			lift = true,
-			linesRemaining;
-	
-	var getReflection = function(size, source) {
-		return (size / 2) + ((size / 2) - source)
-	};
-	
-	var getNextPoint = function(previous) {
-		var yBoost = 0,
-				xBoost = 0,
-				boostFactor = parseFloat(self.deflectAngle());
 
-		if (xIncreasing && yIncreasing) { //Bottom Right
-			yBoost = -boostFactor;
-		} else if (xIncreasing) { //Top right
-			yBoost = boostFactor;
-		} else if (yIncreasing) { //Bottom Left
-			xBoost = boostFactor;
-		} else { //Both decreasing, Top Left
-			xBoost = -boostFactor;
-		}
+	var getLimit = function (start, slope) {
+		var maxHeight = self.height(),
+			maxWidth = self.width(),
+			yLimit = (maxHeight - start.y) / slope,
+			xLimit = (maxWidth - start.x) / slope;
 
-		return new Point(getReflection(self.width(), previous.x) + xBoost, getReflection(self.height(), previous.y) + yBoost);
-	};
-	
-	var setDirection = function(start, finish) {
-		
-		//You hit a corner exactly, you little shit
-		if ((finish.x == 0 || finish.x == self.width())
-			 && (finish.y == 0 || finish.y == self.height())) {
-			self.debugLines.push(new DebugOutput('Corner Hit'));
-		}
-		
-		if (finish.x == 0 || finish.x == self.width()) { // left or right wall
-				xIncreasing = !xIncreasing;
-		} else { // up or down wall
-			yIncreasing = !yIncreasing;
+		console.log('limit', xLimit, yLimit);
+
+		//Corner
+		if (yLimit === xLimit) {
+			return new Point(maxWidth, maxHeight);
+		// Hits top first
+		} else if (yLimit > xLimit) {
+			return new Point(((maxWidth - start.x) / slope) , maxHeight);
+		} else {
+			return new Point(maxWidth, ((maxHeight - start.y) / slope));
 		}
 	};
-	
-	var drawSegment = function(start) {
-		var finish, cp;
-		
-		self.context.moveTo(start.x, start.y);
-		finish = getNextPoint(start);
-		
-		self.context.lineTo(finish.x, finish.y);
-		
-		self.debugLines.push(new DebugSegment(start, finish));
-		
-		setDirection(start, finish);
-		
-		return finish;
+
+	var nextSegment = function(previous, angle) {
+
+		var aSquared = Math.pow(previous.b.x, 2),
+			bSquared = Math.pow(previous.b.y, 2),
+			c = Math.sqrt(aSquared + bSquared),
+			A = Math.asin(previous.b.y / c),
+			sinA = Math.sin(A),
+			C = 180 - angle - A,
+			a = (c * sinA) / Math.sin(degreesToRadians(C)),
+			b = (c * Math.degreeSin(angle)) / Math.degreeSin(C),
+			futurePoint = new Point(b, previous.a.y),
+			futureSlope = getSlope(previous.b, futurePoint),
+			endPoint = getLimit(previous.b, futureSlope),
+			nextSegment = new LineSegment(previous.b, endPoint);
+
+		return nextSegment;
 	};
 	
 	var drawLines = function() {
@@ -186,71 +191,69 @@ var DrawViewmodel = function(canvasId, config) {
 		self.context.lineJoin = "round";
 		self.context.strokeStyle = 'black';
 		
-		var point = {x: 0, y: 0};    
-		
+		var linesRemaining = self.lines(),
+			angle = parseFloat(self.deflectAngle()),
+			origin = new Point(0,0),
+			startingSlope = convertAngleToSlope(angle),
+			endPoint = getLimit(origin, startingSlope),
+			line = new LineSegment(origin, endPoint);
+
+		self.context.moveTo(line.a.x, line.a.y);
+
+		console.log('Init Values', {
+			angle: angle,
+			origin: origin,
+			startingSlope: startingSlope,
+			endPoint: endPoint,
+			line: line
+		});
+
 		while(linesRemaining-- > 0) {
-				point = drawSegment(point);
+			self.context.lineTo(line.b.x, line.b.y);
+			self.debugLines.push(new DebugSegment(line));
+			line = nextSegment(line, angle);
 		};
 		
-	 //Finish Path
+	 	//Finish Path
 		self.context.stroke();
 		self.context.closePath();
 	};
 	
 	self.draw = function() {
+
+		if (!self.canvas || !self.context)
+			return;
+
 		self.context.clearRect(0, 0, self.width(), self.height());
 		self.debugLines.removeAll();
-		linesRemaining = self.lines();
+		
 		drawLines();
-	};
-
-	//
-	//Init
-	//
-	self.init = function() {
-		self.height(config.height);
-		self.width(config.width);
-		self.deflectAngle(config.deflectAngle);
-		self.lines(config.lines);
-		self.useColoredSegments(config.useColoredSegments || true);
-		
-		self.deflectAngleMin(config.deflectAngleMin || 1);
-		self.deflectAngleMax(config.deflectAngleMax || 179);
-		self.linesMin(config.linesMin || 0);
-		self.linesMax(config.linesMax || 100);
-		self.widthMin(config.widthMin || 0);
-		self.widthMax(config.widthMax || 500);
-		self.heightMin(config.heightMin || 0);
-		self.heightMax(config.heightMax || 500);
-		
-		self.canvas = document.getElementById(canvasId);
-		self.context = self.canvas.getContext('2d');
-
-		self.draw();
-	};
+	}.debounce(config.throttle);
 };
 
 var vm = new DrawViewmodel('canvas', {
 	//Values
-	rateLimit: 50,
+	throttle: 50,
 	height: 300,
 	width: 400,
-	deflectAngle: 90,
-	lines: 10,
-	useColoredSegments: true,
+	initialAngle: 45,
+	deflectAngle: 45,
+	lines: 2,
+	useColoredSegments: false,
 	
 	//Limits
-	deflectAngleMin: 1,
-	deflectAngleMax: 179,
+	angleMin: 1,
+	angleMax: 179,
 
-	linesMin: 0,
+	linesMin: 1,
 	linesMax: 100,
 
-	widthMin: 0,
+	widthMin: 10,
 	widthMax: 500,
 
-	heightMin: 0,
+	heightMin: 10,
 	heightMax: 500
 });
 ko.applyBindings(vm);
-vm.init();
+
+vm.draw();

@@ -3,26 +3,17 @@
     <head>
         <title>Tracer</title>
         <link href="app.css" media="all" rel="stylesheet" type="text/css" />
-        <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/knockout/3.1.0/knockout-min.js"></script>
+        <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/sugar/1.4.1/sugar.min.js"></script>
+        <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/knockout/3.1.0/knockout-min.js"></script>        
     </head>
     <body>
         <div>
-            <label>Deflect Angle
-                <input type="range" data-bind="value: deflectAngle, attr: { min: deflectAngleMin, max: deflectAngleMax }" step="1" />
-                <input type="text" data-bind="value: deflectAngle" />
-            </label>
-            <label>Lines
-                <input type="range" data-bind="value: lines, attr: { min: linesMin, max: linesMax }" step="1" />
-                <input type="text" data-bind="value: lines" />
-            </label>
-            <label>Width
-                <input type="range" data-bind="value: width, attr: { min: widthMin, max: widthMax }" step="1" />
-                <input type="text" data-bind="value: width" />
-            </label>
-            <label>Height
-                <input type="range" data-bind="value: height, attr: { min: heightMin, max: heightMax }" step="1" />
-                <input type="text" data-bind="value: height" />
-            </label>
+        <!-- ko foreach: sliders -->
+        <label><span data-bind="text: name"></span>
+            <input type="range" data-bind="value: $data, attr: { min: min, max: max, step: step }" />
+            <input type="text" data-bind="value: $data" />
+        </label>
+        <!-- /ko -->            
             <label>Colored Segments
                 <input type="checkbox" data-bind="checked: useColoredSegments" />
             </label>
