@@ -40,6 +40,10 @@ function getSlope(p1, p2) {
 	return (p2.y - p1.y) / (p2.x - p1.x);
 }
 
+function getLength(p1, p2) {
+	return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+}
+
 function getReflectiveSlope(p1, p2, angle) {
 	var slope = getSlope(p1, p2),
 		radianAngle = degreesToRadians(angle),
@@ -96,6 +100,10 @@ var LineSegment = function(a, b) {
 
 	Object.defineProperty(self, 'slope', {
 		get: function() { return getSlope(self.a, self.b); }
+	});
+
+	Object.defineProperty(self, 'length', {
+		get: function() { return getLength(self.a, self.b); }
 	});
 
 	self.copy = function() {
@@ -171,20 +179,12 @@ var DrawViewmodel = function(canvasId, config) {
 		}
 	};
 
-	var nextSegment = function(previous, angle) {
+	var nextSegment = function(sideC, angleA, angleB) {
 
-		var aSquared = Math.pow(previous.b.x, 2),
-			bSquared = Math.pow(previous.b.y, 2),
-			c = Math.sqrt(aSquared + bSquared),
-			A = Math.asin(previous.b.y / c),
-			sinA = Math.sin(A),
-			C = 180 - angle - A,
-			a = (c * sinA) / Math.sin(degreesToRadians(C)),
-			b = (c * Math.degreeSin(angle)) / Math.degreeSin(C),
-			futurePoint = new Point(b, previous.a.y),
-			futureSlope = getSlope(previous.b, futurePoint),
-			endPoint = getLimit(previous.b, futureSlope),
-			nextSegment = new LineSegment(previous.b, endPoint);
+		//looking for sideb
+		var angleC = 180 - angleA - angleB,
+			sideA = (sideC.length * Math.degreeSin(angleA)) / Math.degreeSin(angleC),
+			sideB = (sideC.length * Math.degreeSin(angleB)) / Math.degreeSin(angleC);
 
 		return nextSegment;
 	};
@@ -197,7 +197,7 @@ var DrawViewmodel = function(canvasId, config) {
 		self.context.strokeStyle = 'black';
 		
 		var linesRemaining = self.lines.value(),
-			angle = parseFloat(self.deflectAngle.value()),
+			angle = parseFloat(self.initialAngle.value()),
 			origin = new Point(0,0),
 			startingSlope = convertAngleToSlope(angle),
 			endPoint = getLimit(origin, startingSlope),
@@ -213,10 +213,14 @@ var DrawViewmodel = function(canvasId, config) {
 			line: line
 		});
 
+		var angle1 = angle,
+			angle2 = self.deflectAngle.value();
+
 		while(linesRemaining-- > 0) {
 			self.context.lineTo(line.b.x, line.b.y);
 			self.debugLines.push(new DebugSegment(line));
-			line = nextSegment(line, angle);
+			line = nextSegment(line, angle1, angle2);
+			angle1 = angle2;
 		};
 		
 	 	//Finish Path
@@ -241,7 +245,7 @@ var vm = new DrawViewmodel('canvas', {
 	throttle: 50,
 	height: 300,
 	width: 400,
-	initialAngle: 45,
+	initialAngle: 40,
 	deflectAngle: 45,
 	lines: 2,
 	useColoredSegments: false,
