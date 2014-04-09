@@ -106,15 +106,15 @@ var LineSegment = function(a, b) {
 };
 
 var SliderViewmodel = function(name, initial, min, max, step, valueHandler) {
-	var self = ko.observable(initial);
-	self.subscribe(function(n) { valueHandler(n); });
+	var self = this;
+
+	self.value = ko.observable(initial);
+	self.value.subscribe(function(n) { valueHandler(n); });
 	
 	self.name = name;
 	self.step = step;
 	self.min = min;
 	self.max = max;
-
-	return self;
 };
 
 var DrawViewmodel = function(canvasId, config) {
@@ -129,14 +129,19 @@ var DrawViewmodel = function(canvasId, config) {
 	//
 	//Drawable Properties
 	//
-	self.height = new SliderViewmodel('Height', c.height, c.heightMin, c.heightMax, 1, self.draw);
-	self.width = new SliderViewmodel('Width', c.width, c.widthMin, c.widthMax, 1, self.draw);
-	self.initialAngle = new SliderViewmodel('Initial Angle', c.initialAngle, c.angleMin, c.angleMax, 1, self.draw);
-	self.deflectAngle = new SliderViewmodel('Deflect Angle', c.deflectAngle, c.angleMin, c.angleMax, 1, self.draw);
-	self.lines = new SliderViewmodel('Lines', c.lines, c.linesMin, c.linesMax, 1, self.draw);
+	
+	//We haven't assigned this yet, and would lose the context even if we did
+	//The handler should call draw even if the property is reassigned
+	var subHandler = function() { self.draw(); }
+
+	self.height = new SliderViewmodel('Height', c.height, c.heightMin, c.heightMax, 1, subHandler);
+	self.width = new SliderViewmodel('Width', c.width, c.widthMin, c.widthMax, 1, subHandler);
+	self.initialAngle = new SliderViewmodel('Initial Angle', c.initialAngle, c.angleMin, c.angleMax, 1, subHandler);
+	self.deflectAngle = new SliderViewmodel('Deflect Angle', c.deflectAngle, c.angleMin, c.angleMax, 1, subHandler);
+	self.lines = new SliderViewmodel('Lines', c.lines, c.linesMin, c.linesMax, 1, subHandler);
 
 	self.sliders = ko.observableArray([
-		self.height //, self.width, self.initialAngle, self.deflectAngle, self.lines
+		self.initialAngle, self.deflectAngle, self.lines, self.height, self.width
 	]);
 
 	self.canvas = document.getElementById(canvasId);
@@ -148,8 +153,8 @@ var DrawViewmodel = function(canvasId, config) {
 	//
 
 	var getLimit = function (start, slope) {
-		var maxHeight = self.height(),
-			maxWidth = self.width(),
+		var maxHeight = self.height.value(),
+			maxWidth = self.width.value(),
 			yLimit = (maxHeight - start.y) / slope,
 			xLimit = (maxWidth - start.x) / slope;
 
@@ -191,8 +196,8 @@ var DrawViewmodel = function(canvasId, config) {
 		self.context.lineJoin = "round";
 		self.context.strokeStyle = 'black';
 		
-		var linesRemaining = self.lines(),
-			angle = parseFloat(self.deflectAngle()),
+		var linesRemaining = self.lines.value(),
+			angle = parseFloat(self.deflectAngle.value()),
 			origin = new Point(0,0),
 			startingSlope = convertAngleToSlope(angle),
 			endPoint = getLimit(origin, startingSlope),
@@ -224,7 +229,7 @@ var DrawViewmodel = function(canvasId, config) {
 		if (!self.canvas || !self.context)
 			return;
 
-		self.context.clearRect(0, 0, self.width(), self.height());
+		self.context.clearRect(0, 0, self.width.value(), self.height.value());
 		self.debugLines.removeAll();
 		
 		drawLines();

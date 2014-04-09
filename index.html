@@ -8,12 +8,12 @@
     </head>
     <body>
         <div>
-        <!-- ko foreach: sliders -->
-        <label><span data-bind="text: name"></span>
-            <input type="range" data-bind="value: $data, attr: { min: min, max: max, step: step }" />
-            <input type="text" data-bind="value: $data" />
-        </label>
-        <!-- /ko -->            
+            <!-- ko foreach: sliders -->
+                <label><span data-bind="text: name"></span>
+                    <input type="range" data-bind="value: value, attr: { min: min, max: max, step: step }" />
+                    <input type="text" data-bind="value: value" />
+                </label>
+            <!-- /ko -->
             <label>Colored Segments
                 <input type="checkbox" data-bind="checked: useColoredSegments" />
             </label>
