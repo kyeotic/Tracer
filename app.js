@@ -33,6 +33,7 @@ function convertAngleToSlope(angle) {
 };
 
 Math.degreeSin = function(degrees) { return Math.sin(degreesToRadians(degrees)); };
+Math.degreeTan = function(degrees) { return Math.tan(degreesToRadians(degrees)); };
 
 //getTanDeg(angle) = slope
 
@@ -160,11 +161,24 @@ var DrawViewmodel = function(canvasId, config) {
 	//Drawing
 	//
 
-	var getLimit = function (start, slope) {
+	var getEndPoint = function (start, slope) {
 		var maxHeight = self.height.value(),
 			maxWidth = self.width.value(),
-			yLimit = (maxHeight - start.y) / slope,
-			xLimit = (maxWidth - start.x) / slope;
+			xIncreasing;
+
+		//We need to know which way the line is travelling
+		//Slope doesn't give us the whole story
+		//the starting point should be on one of the walls
+		//or in a corner. We need to know if we are looking for the limit
+		//as X increases or decreases
+
+
+		
+
+
+
+		// yLimit = (maxHeight - start.y) / slope,
+		// xLimit = (maxWidth - start.x) / slope;
 
 		console.log('limit', xLimit, yLimit);
 
@@ -179,12 +193,36 @@ var DrawViewmodel = function(canvasId, config) {
 		}
 	};
 
-	var nextSegment = function(sideC, angleA, angleB) {
+	var getFutureSlope = function(M, angle) {
+		/*
+			The original formula for this is:
 
-		//looking for sideb
-		var angleC = 180 - angleA - angleB,
-			sideA = (sideC.length * Math.degreeSin(angleA)) / Math.degreeSin(angleC),
-			sideB = (sideC.length * Math.degreeSin(angleB)) / Math.degreeSin(angleC);
+			Tan(angle) = absolute((m - M) / (1 + mM)
+
+			This means that the negative formula applies when m < M
+			and the positive formula applies when m > M
+
+			We just perform both, and compare them the absolute value version
+		*/
+
+		var H = Math.degreeTan(angle),
+			mLarge = (M + H) / (1 - (M * H)),
+			mSmall = (M + -H) / (1 - (M * -H)),
+			absoluteLarge = Math.abs((mlarge - M) / (1 + (mLarge * M))),
+			absoluteSmall = Math.abs((mSmall - M) / (1 + (mSmall * M)));
+
+		if (mLarge == absoluteLarge)
+			return mLarge;
+		else if (mSmall == absoluteSmall)
+			return mSmall;
+		else
+			throw new Error('Unable to find slope');		
+	};
+
+	var nextSegment = function(previousLine, angle) {
+		var futuereSlope = getFutureSlope(previousLine.slope, angle),
+			endPoint =  getEndPoint(previousLine.b, futuereSlope),
+			nextSegment = new LineSegment(previousLine.b, endPoint);
 
 		return nextSegment;
 	};
@@ -197,10 +235,10 @@ var DrawViewmodel = function(canvasId, config) {
 		self.context.strokeStyle = 'black';
 		
 		var linesRemaining = self.lines.value(),
-			angle = parseFloat(self.initialAngle.value()),
+			angle = parseFloat(self.deflectAngle.value()),
 			origin = new Point(0,0),
-			startingSlope = convertAngleToSlope(angle),
-			endPoint = getLimit(origin, startingSlope),
+			startingSlope = convertAngleToSlope(self.initialAngle.value()),
+			endPoint = getEndPoint(origin, startingSlope),
 			line = new LineSegment(origin, endPoint);
 
 		self.context.moveTo(line.a.x, line.a.y);
@@ -211,16 +249,11 @@ var DrawViewmodel = function(canvasId, config) {
 			startingSlope: startingSlope,
 			endPoint: endPoint,
 			line: line
-		});
-
-		var angle1 = angle,
-			angle2 = self.deflectAngle.value();
 
 		while(linesRemaining-- > 0) {
 			self.context.lineTo(line.b.x, line.b.y);
 			self.debugLines.push(new DebugSegment(line));
-			line = nextSegment(line, angle1, angle2);
-			angle1 = angle2;
+			line = nextSegment(line, angle);
 		};
 		
 	 	//Finish Path
