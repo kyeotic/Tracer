@@ -53,6 +53,10 @@ function getReflectiveSlope(p1, p2, angle) {
 	return ( tangentAngle + slope) / ( tangentAngle - slope);
 }
 
+function isInifinity(n) {
+	return n === Number.POSITIVE_INFINITY || n === Number.NEGATIVE_INFINITY;
+}
+
 //angle = (slope1 - slope2) / ( 1 + slope1 x slope2)
 //tan(angle) = slope
 //arctan(slope) = angle
@@ -160,42 +164,97 @@ var DrawViewmodel = function(canvasId, config) {
 	//
 	//Drawing
 	//
+	var blackhole;
 
-	var getEndPoint = function (start, slope) {
-		var maxHeight = self.height.value(),
-			maxWidth = self.width.value(),
-			xIncreasing;
+	var getEndPoint = function (start, slope, angle) {
+		var x = start.x,
+			y = start.y,
+			xZero = start.x === 0,
+			yZero = start.y === 0,
+			xMax = start.x === self.width.value(),
+			yMax = start.y === self.height.value(),
+			slopeInfinite = isInifinity(slope),
+			slopeZero = slope === 0 && !slopeInfinite,
+			slopeIncreasing = slope > 0 && !slopeInfinite,
+			slopeDecreasing = slope < 0 && !slopeInfinite,			
+			xIncreasing,
+			endPoint = start.copy();
 
 		//We need to know which way the line is travelling
-		//Slope doesn't give us the whole story
-		//the starting point should be on one of the walls
-		//or in a corner. We need to know if we are looking for the limit
-		//as X increases or decreases
+		//slope doesn't give us the whole story
+		//the starting point will be on one of the walls (we already looked for corners)
+		//We need to know if we are looking for the limit as X increases or decreases
+
+		//Blue star = x decreases
+		//Green star = x increases
+		//? - see table
 
 
-		
+		//When we encounter black holes, we should NOT move the endPoint
+		//Showing where the impact happened is better than showing where
+		//The first point in the black hole would be
 
+		if (angle === 90 && (slopeZero || slopeInfinite)) {
+			blackhole = endPoint;
+		//Special Cases
+		} else if (slopeInfinite) {
+			//X cases
+			if ((xZero && angle > 90) || (xMax && angle < 90))
+				endPoint.y = self.height.value();
+			else if ((xZero && angle < 90) || (xMax && angle > 90))
+				endPoint.y = 0;
 
+			//Y cases
+			if (yZero)
+				endPoint.y = self.height.value();
+			else
+				endPoint.y = 0;
 
-		// yLimit = (maxHeight - start.y) / slope,
-		// xLimit = (maxWidth - start.x) / slope;
-
-		console.log('limit', xLimit, yLimit);
-
-		//Corner
-		if (yLimit === xLimit) {
-			return new Point(maxWidth, maxHeight);
-		// Hits top first
-		} else if (yLimit > xLimit) {
-			return new Point(((maxWidth - start.x) / slope) , maxHeight);
+		//More special cases
+		} else if (slopeZero && (yZero)) {
+			endPoint.x = angle > 90 ? self.width.value() : 0;		
+		} else if(slopeZero && yMax) {
+			endPoint.x = angle < 90 ? self.width.value() : 0;
+		//Normal Cases
 		} else {
-			return new Point(maxWidth, ((maxHeight - start.y) / slope));
+			if ((xZero && (slopeIncreasing || slopeDecreasing))
+				|| (xMax && slopeZero)
+				|| (yZero && slopeIncreasing)
+				|| (yMax && slopeDecreasing)
+			)
+				xIncreasing = true;
+			else if ((xZero && slopeZero)
+				|| (xMax && (slopeIncreasing || slopeDecreasing))
+				|| (yZero && slopeDecreasing)
+				|| (yMax && slopeIncreasing)
+			)
+				xIncreasing = false;
+
+			var xLimit = xIncreasing ? self.width.value() : 0,
+				yLimit = (xIncreasing && slopeIncreasing) || (!xIncreasing && slopeDecreasing)
+							? self.height.value() : 0,
+				findLarger = (xIncreasing && slopeDecreasing) || (!xIncreasing && slopeIncreasing),
+				xNext = (yLimit + y + (slope * x)) / slope,
+				yNext = (slope * xLimit) - (slope * x) - y,
+				xIsLimit = xNext > yNext && findLarger;
+
+			if (xIsLimit) {
+				endPoint.x = (yNext + y + (slope * x)) / slope;
+				endPoint.y = yNext;
+			} else {
+				endPoint.x = xNext;
+				endPoint.y = (slope * xNext) - (slope * x) - y;
+			}
 		}
+
+		return endPoint;
 	};
 
 	var getFutureSlope = function(M, angle) {
 		/*
 			The original formula for this is:
+
+			m = ( M + tan(θ)) / ( 1 - M tan(θ))
 
 			Tan(angle) = absolute((m - M) / (1 + mM)
 
@@ -208,7 +267,7 @@ var DrawViewmodel = function(canvasId, config) {
 		var H = Math.degreeTan(angle),
 			mLarge = (M + H) / (1 - (M * H)),
 			mSmall = (M + -H) / (1 - (M * -H)),
-			absoluteLarge = Math.abs((mlarge - M) / (1 + (mLarge * M))),
+			absoluteLarge = Math.abs((mLarge - M) / (1 + (mLarge * M))),
 			absoluteSmall = Math.abs((mSmall - M) / (1 + (mSmall * M)));
 
 		if (mLarge == absoluteLarge)
@@ -219,9 +278,31 @@ var DrawViewmodel = function(canvasId, config) {
 			throw new Error('Unable to find slope');		
 	};
 
+	var isCorner = function(point) {
+		var x = point.x,
+			y = point.y;
+		return ((x === 0 || x === self.width.value()) && (y === 0 || y === self.height.value()));
+	};
+
+	var getEndPointFromCorner = function(previousLine, angle) {
+
+		//TODO:
+
+			//ACTUAL LOGIC!!!
+
+		//
+		var slope = convertAngleToSlope(self.deflectAngle.value());
+
+		return getEndPoint(previousLine.b, slope, angle);
+	};
+
 	var nextSegment = function(previousLine, angle) {
+
+		if (isCorner(previousLine.b))
+			return getEndPointFromCorner(previousLine.b, angle);
+
 		var futuereSlope = getFutureSlope(previousLine.slope, angle),
-			endPoint =  getEndPoint(previousLine.b, futuereSlope),
+			endPoint =  getEndPoint(previousLine.b, futuereSlope, angle),
 			nextSegment = new LineSegment(previousLine.b, endPoint);
 
 		return nextSegment;
@@ -238,7 +319,7 @@ var DrawViewmodel = function(canvasId, config) {
 			angle = parseFloat(self.deflectAngle.value()),
 			origin = new Point(0,0),
 			startingSlope = convertAngleToSlope(self.initialAngle.value()),
-			endPoint = getEndPoint(origin, startingSlope),
+			endPoint = getEndPoint(origin, startingSlope, self.initialAngle.value()),
 			line = new LineSegment(origin, endPoint);
 
 		self.context.moveTo(line.a.x, line.a.y);
@@ -249,6 +330,7 @@ var DrawViewmodel = function(canvasId, config) {
 			startingSlope: startingSlope,
 			endPoint: endPoint,
 			line: line
+		});
 
 		while(linesRemaining-- > 0) {
 			self.context.lineTo(line.b.x, line.b.y);
@@ -278,8 +360,8 @@ var vm = new DrawViewmodel('canvas', {
 	throttle: 50,
 	height: 300,
 	width: 400,
-	initialAngle: 40,
-	deflectAngle: 45,
+	initialAngle: 45,
+	deflectAngle: 80,
 	lines: 2,
 	useColoredSegments: false,
 	
